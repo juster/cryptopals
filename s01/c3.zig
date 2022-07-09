@@ -15,6 +15,9 @@ const alpha_count = 'Z' - 'A' + 1;
 var letter_freq: [alpha_count]f32 = undefined;
 var alpha_freq: [alpha_count]f32 = .{ 8.2, 1.5, 2.8, 4.3, 13.0, 2.2, 2.0, 6.1, 7.0, 0.15, 0.77, 4.0, 2.4, 6.7, 7.5, 1.9, 0.095, 6.0, 6.3, 9.1, 2.8, 0.98, 2.4, 0.15, 2.0, 0.074 };
 
+const printable_min = ' ';
+const printable_max = '~';
+
 fn letterFrequency(dest: []f32, text: []const u8) u64 {
     var count: [alpha_count]u8 = undefined;
     var n_alpha: u64 = 0;
@@ -39,14 +42,17 @@ fn letterFrequency(dest: []f32, text: []const u8) u64 {
 
 fn score(text: []u8) f32 {
     for (text) |ch| {
-        if (ch < ' ' or ch > '~') return 0.0;
+        if (ch < printable_min or ch > printable_max) return 0.0;
     }
+
     const n = letterFrequency(&letter_freq, text);
-    var sd: f32 = 0.0;
+    var variance: f32 = 0.0;
     for (letter_freq) |p, i| {
-        sd += math.pow(f32, p - (alpha_freq[i] / 100.0), 2);
+        variance += math.pow(f32, p - (alpha_freq[i] / 100.0), 2);
     }
-    return (@intToFloat(f32, n) / @intToFloat(f32, text.len)) * (1.0 / sd);
+
+    const alpha_ratio = @intToFloat(f32, n);
+    return (100.0 * alpha_ratio / @intToFloat(f32, text.len)) * (1.0 / math.sqrt(variance));
 }
 
 // XOR one-time-pad
