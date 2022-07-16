@@ -1,0 +1,2 @@
+#!/bin/sh
+zig build-exe -I$CRYPTLIB -L$CRYPTLIB -lcl --pkg-begin cryptlib cryptlib.zig --pkg-end c7.zig
