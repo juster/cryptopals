@@ -1,2 +1,7 @@
 #!/bin/sh
-zig build-exe -I$CRYPTLIB -L$CRYPTLIB -lcl --pkg-begin cryptlib cryptlib.zig --pkg-end c7.zig
+if [ -z "$CRYPTLIB" ] ; then
+    echo "error: set CRYPTLIB env var to path of cryptlib"
+    exit 2
+fi
+
+zig build-exe -I$CRYPTLIB -L$CRYPTLIB -lcl --pkg-begin cryptlib ../lib/cryptlib.zig --pkg-end c7.zig
