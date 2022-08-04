@@ -14,10 +14,10 @@ var alpha_freq: [alpha_count]f32 = .{ 8.2, 1.5, 2.8, 4.3, 13.0, 2.2, 2.0, 6.1, 7
 const printable_min = ' ';
 const printable_max = '~';
 
-var input_lines: [128][] const u8 = undefined;
+var input_lines: [128][]const u8 = undefined;
 var line_count: u8 = 0;
 
-fn hamming(a: [] const u8, b: [] const u8) u64 {
+fn hamming(a: []const u8, b: []const u8) u64 {
     assert(a.len == b.len);
     var result: u64 = 0;
     for (a) |x, i| result += @popCount(u8, x ^ b[i]);
@@ -37,10 +37,10 @@ fn joinLines(a: []u8) []u8 {
         if (i > j) a[j] = a[i];
         j += 1;
     }
-    return a[0 .. j];
+    return a[0..j];
 }
 
-fn slurpLines(path: [] const u8, allocator: std.mem.Allocator, limit: usize) ![]u8 {
+fn slurpLines(path: []const u8, allocator: std.mem.Allocator, limit: usize) ![]u8 {
     var lines = try std.fs.cwd().readFileAlloc(allocator, path, limit);
     var buf = joinLines(lines);
     return allocator.shrink(lines, buf.len);
@@ -50,10 +50,7 @@ const min_block_size = 2;
 const max_block_size = 40;
 const block_size_count = max_block_size - min_block_size + 1;
 
-const BlockDistance = struct {
-    block_size: u8,
-    distance: f32
-};
+const BlockDistance = struct { block_size: u8, distance: f32 };
 
 fn byDistance(_: void, a: BlockDistance, b: BlockDistance) bool {
     return a.distance < b.distance;
@@ -68,8 +65,8 @@ fn guessBlockSizes(dest: []BlockDistance, cypher: []u8) void {
         var j: usize = 0;
         var sum: u64 = 0;
         while (j < n) : (j += 1) {
-            const block1 = cypher[sz*(j+0) .. sz*(j+1)];
-            const block2 = cypher[sz*(j+1) .. sz*(j+2)];
+            const block1 = cypher[sz * (j + 0) .. sz * (j + 1)];
+            const block2 = cypher[sz * (j + 1) .. sz * (j + 2)];
             sum += hamming(block1, block2);
         }
 
@@ -82,9 +79,7 @@ fn guessBlockSizes(dest: []BlockDistance, cypher: []u8) void {
     sort(BlockDistance, dest, {}, byDistance);
 }
 
-fn blocksByteAt(
-    byte_index: u8, block_size: u8, blocks: []u8, allocator: std.mem.Allocator
-) ![]u8 {
+fn blocksByteAt(byte_index: u8, block_size: u8, blocks: []u8, allocator: std.mem.Allocator) ![]u8 {
     var i: usize = byte_index;
     var j: usize = 0;
     var len = blocks.len / block_size;
@@ -100,7 +95,7 @@ fn blocksByteAt(
 
 fn letterFrequency(dest: []f32, text: []const u8) u64 {
     var count: [alpha_count]u8 = undefined;
-    var n_alpha: u64 = 0;
+    var n_printable: u64 = 0;
     assert(dest.len == alpha_count);
 
     for (count) |_, i| {
@@ -108,36 +103,33 @@ fn letterFrequency(dest: []f32, text: []const u8) u64 {
         dest[i] = 0.0;
     }
     for (text) |ch| {
-        var uch = ch & ~@as(u8, 0x20);
-        if (uch < 'A' or uch > 'Z') continue;
+        if (ch < printable_min or ch > printable_max) continue;
+        n_printable += 1;
+        if (!std.ascii.isAlpha(ch)) continue;
+        var uch = ch & ~@as(u8, 0x20); // make ASCII uppercase
         count[uch - 'A'] += 1;
-        n_alpha += 1;
     }
     for (count) |n, i| {
-        dest[i] = @intToFloat(f32, n) / @intToFloat(f32, n_alpha);
+        dest[i] = @intToFloat(f32, n) / @intToFloat(f32, text.len); //@intToFloat(f32, n_alpha);
     }
 
-    return n_alpha;
+    return n_printable;
 }
 
 fn score(text: []u8) f32 {
-    // for (text) |ch| {
-    //     if (ch == '\r' or ch == '\n' or ch == '\t') continue;
-    //     if (ch < printable_min or ch > printable_max) return 0.0;
-    // }
-
     const n = letterFrequency(&letter_freq, text);
     var variance: f32 = 0.0;
     for (letter_freq) |p, i| {
         variance += math.pow(f32, p - (alpha_freq[i] / 100.0), 2);
     }
 
-    const alpha_ratio = @intToFloat(f32, n);
-    return (100.0 * alpha_ratio / @intToFloat(f32, text.len)) * (100.0 / math.sqrt(variance));
+    const print_ratio = @intToFloat(f32, n) / @intToFloat(f32, text.len);
+    // std.debug.print("*DBG* alpha_ratio = {} :: text = {s}\n", .{alpha_ratio, text});
+    return print_ratio * (100.0 / math.sqrt(variance));
 }
 
-
 const ScoreText = struct {
+    offset: u8,
     key: [1]u8,
     score: f32,
     text: []u8,
@@ -148,7 +140,7 @@ fn byScore(context: void, a: ScoreText, b: ScoreText) bool {
     return a.score >= b.score;
 }
 
-const top_results_count = 5;
+const top_results_count = 2;
 
 // XOR with key in place
 fn xorBytes(buf: []u8, key: []const u8) void {
@@ -168,21 +160,23 @@ fn crack(result: *ScoreText, cypher: []u8, allocator: std.mem.Allocator) !bool {
     var i: usize = 0;
     while (i < 255) : (i += 1) {
         const iter = &scored[i];
-        var plain = buf[i*cypher.len .. (i+1)*cypher.len];
+        var plain = buf[i * cypher.len .. (i + 1) * cypher.len];
         std.mem.copy(u8, plain, cypher);
-        iter.key[0] = @truncate(u8, i+1);
+        iter.key[0] = @truncate(u8, i + 1);
         xorBytes(plain, &iter.key);
         iter.text = plain;
         iter.score = score(plain);
     }
 
-    // print the top results
+    // Print the top results
     sort(ScoreText, &scored, {}, byScore);
     if (scored[0].score == 0.0) return false; // all scores are awful
     for (scored) |iter, j| {
         if (j >= top_results_count) break;
         if (iter.score == 0.0) break;
-        // std.debug.print("*DBG* score {d}\t{}\t{d:1.2}\n", .{ j+1, fmt.fmtSliceHexUpper(&iter.key), iter.score});
+        // std.debug.print("*DBG* score offset:{}\t{d}\t{}\t{d:1.2}\t{s}\n", .{
+        //     result.offset, j+1, fmt.fmtSliceHexUpper(&iter.key), iter.score, iter.text
+        // });
     }
 
     result.key = scored[0].key;
@@ -202,16 +196,11 @@ fn crackBlockSize(key_dest: []u8, cypher: []u8, allocator: std.mem.Allocator) !b
         var text_buf = try allocator.alloc(u8, nth.len);
         defer allocator.free(text_buf);
 
-        var score_text: ScoreText = .{
-            .key = .{0},
-            .text = text_buf[0..],
-            .score = 0.0
-        };
-
+        var score_text: ScoreText = .{ .offset = i, .key = .{0}, .text = text_buf[0..], .score = 0.0 };
         if (try crack(&score_text, nth, allocator)) {
             // std.debug.print("*DBG* key byte {d}: {X:2>0}\n", .{i, score_text.key[0]});
             key_dest[i] = score_text.key[0];
-        }else {
+        } else {
             std.debug.print("error: failed to crack byte {d}\n", .{i});
             return false;
         }
@@ -226,7 +215,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     var allocator = gpa.allocator();
 
-    var b64 = try slurpLines("6.txt", allocator, 1*1024*1024);
+    var b64 = try slurpLines("6.txt", allocator, 1 * 1024 * 1024);
     defer allocator.free(b64);
     std.debug.print("*DBG* read {} bytes\n", .{b64.len});
 
@@ -247,11 +236,20 @@ pub fn main() !void {
         var key = try allocator.alloc(u8, block_size);
         defer allocator.free(key);
         if (try crackBlockSize(key[0..], cypher, allocator)) {
-            std.debug.print("*DBG* block size {} found key {s}\n",
-                            .{block_size, key[0..]});
+            std.debug.print("*DBG* block size {} found key {s}\n", .{ block_size, key[0..] });
             std.mem.copy(u8, plain, cypher);
             xorBytes(plain, key[0..]);
-            try out.print("{s}\n", .{plain});
+            try out.print("-----\n{s}-----\n\n", .{plain});
+
+            // var offset: usize = 0;
+            // while (offset < block_size) : (offset += 1) {
+            //     try out.print("*DBG* byte {} key char: {c}\n", .{offset, key[offset]});
+            //     var i: usize = offset;
+            //     while (i < plain.len) : (i += block_size) {
+            //         try out.print("{c}", .{plain[i]});
+            //     }
+            //     try out.print("\n", .{});
+            // }
             return;
         }
     }
