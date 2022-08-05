@@ -67,8 +67,38 @@ test "encrypt/decrypt ECB" {
     try expectEqualSlices(u8, plain1[0..], plain2[0..]);
 }
 
-const expectEqual = testing.expectEqual;
+fn joinLines(a: []u8) []u8 {
+    var i: u64 = 0;
+    var j = i;
+    while (i < a.len) : (i += 1) {
+        if (a[i] == '\n') continue;
+        if (i > j) a[j] = a[i];
+        j += 1;
+    }
+    return a[0 .. j];
+}
+
+fn slurpBase64File(path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+    var base64 = try std.fs.cwd().readFileAlloc(allocator, path, 1024*1024);
+    defer allocator.free(base64);
+    const dec64 = std.base64.standard.Decoder;
+    var raw = try allocator.alloc(u8, try dec64.calcSizeForSlice(base64));
+    base64 = joinLines(base64);
+    try dec64.decode(raw, base64);
+    return raw;
+}
 
 pub fn main() !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
+    var cypher_text = try slurpBase64File("10.txt", allocator);
+    defer allocator.free(cypher_text);
+
+    var plain_text = try allocator.alloc(u8, cypher_text.len);
+    aesDecryptCBC(plain_text, cypher_text, "YELLOW SUBMARINE", "\x00" ** aes_block_size);
+
+    var out = std.io.getStdOut().writer();
+    try out.print("{s}\n\n", .{plain_text});
 }
